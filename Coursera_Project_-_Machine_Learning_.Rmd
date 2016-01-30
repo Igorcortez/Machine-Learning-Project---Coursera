@@ -1,0 +1,110 @@
+---
+title: "Coursera - Practical Machine Learning Project"
+author: "Igor Siqueira Cortez"
+date: "26 de janeiro de 2016"
+output: html_document
+---
+#Synopsis
+
+Training and test data used in this works comes from the following study:
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+The goal of this project is to “predict the manner in which they did the exercise.”
+
+For the purpose of the analysis i am going to work with the packages below:
+```{r}
+library(AppliedPredictiveModeling)
+library(caret)
+library(rattle)
+library(randomForest)
+```
+
+#INPUTING THE DATA
+```{r}
+#Download data.
+url_data <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+file_dest <- "pml-training.csv"
+download.file(url=url_data, destfile=file_dest, method="curl")
+url_test <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+dest_test <- "pml-testing.csv"
+download.file(url=url_test, destfile=dest_test, method="curl")
+
+#Treating empty values as NA.
+data_training <- read.csv(file_dest, na.strings=c("NA",""), header=TRUE)
+colnames_train <- colnames(data_training)
+data_testing <- read.csv(dest_test, na.strings=c("NA",""), header=TRUE)
+colnames_test <- colnames(data_testing)
+
+# Verifying columns in both training and testing datasets. 
+all.equal(colnames_train[1:length(colnames_train)-1], colnames_test[1:length(colnames_train)-1])
+```
+
+#FEATURES
+In this section we remove the variables that has a high proportion of NAs. So in the next section we can use the full observations in the data set to estimate the model. 
+```{r, echo=FALSE}
+# This function counts the number of non-NAs in each col.
+nonNAs <- function(x) {
+    as.vector(apply(x, 2, function(x) length(which(!is.na(x)))))
+}
+
+# Now we set a vector of  NA columns to drop.
+colcnts <- nonNAs(data_training)
+drops <- c()
+for (cnt in 1:length(colcnts)) {
+    if (colcnts[cnt] < nrow(data_training)) {
+        drops <- c(drops, colnames_train[cnt])
+    }
+}
+
+# Drop NA data and the first 7 columns as they're unnecessary for predicting.
+data_training <- data_training[,!(names(data_training) %in% drops)]
+data_training <- data_training[,8:length(colnames(data_training))]
+
+data_testing <- data_testing[,!(names(data_testing) %in% drops)]
+data_testing <- data_testing[,8:length(colnames(data_testing))]
+
+# Show remaining columns.
+colnames(data_training)
+colnames(data_testing)
+```
+Based on both the materials in the course and the coursera discussion forums, I chose the random forests (method = rf).
+
+#EVALUATION
+```{r, echo=FALSE}
+# Divide the given training set into 2 unequal sets.
+set.seed(123)
+id <- createDataPartition(y=data_training$classe, p=0.6, list=FALSE)
+ train_train<- data_training[id,]
+ traom_test <- data_training[-id,]
+# Train on training set 1 of 4 with only cross validation.
+set.seed(1234)
+mod_rf <- train(train_train$classe ~ ., method="rf", trControl=trainControl(method = "cv", number = 4), data=train_train)
+print(mod_rf, digits=3)
+```
+
+As we can see for the results de accuracy of the model in the training sample is about 98%. In the next step we are going to check the out of sample error, aplying the model to a test database and the 20 cases in the data_testing sample. 
+
+#OUT OF SAMPLE ERROR
+```{r, echo=FALSE}
+# Run against the testing data base
+pred_rf<- predict(mod_rf, newdata=traom_test)
+print(confusionMatrix(pred_rf, traom_test$classe), digits=4)
+```
+
+The results from the confusion matrix show an accuracy of 0.9913. So error out of sample would be 1-0.9913 =0.0087. But we still might test the model in the 20 case test sample provided. 
+
+```{r, echo=FALSE}
+pred_20<- predict(mod_rf, newdata=data_testing)
+pred_20
+```
+
+#CONCLUSION
+
+I received three separate predictions: the predtiction in the training set, in the subset of the training set (traom_test database)  and the data_testing with the 20 cases. 
+
+A) Accuracy Rate of near 0.98 in the training data-set 
+
+B) Accuracy Rates of 99.13% in an testing sample (random subset of the training data base provided.)
+
+C) And Predictions: B A B A A E D B A A B C B A E E A B B B for the 20 case test data-set.  
